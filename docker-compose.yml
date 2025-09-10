@@ -1,26 +1,50 @@
-# yaml 配置
-version: "3.7"
+version: '3'
+
 services:
-  mysql8019:
-    image: "mysql:8.0.19"
-    ports:
-      - "33061:3306"
-    command: "--default-authentication-plugin=mysql_native_password --init-file /data/application/init.sql"
-    environment:
-      MYSQL_ROOT_PASSWORD: "root1234"
-      MYSQL_DATABASE: "bluebell"
-      MYSQL_PASSWORD: "root1234"
-    volumes:
-      - ./init.sql:/data/application/init.sql
-  redis507:
-    image: "redis:5.0.7"
-    ports:
-      - "26379:6379"
-  bluebell_app:
+  app:
     build: .
-    command: sh -c "./wait-for.sh mysql8019:3306 redis507:6379 -- ./bluebell_app ./conf/config.yaml"
-    depends_on:
-      - mysql8019
-      - redis507
     ports:
-      - "8888:8084"
+      - "8084:8084"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+    networks:
+      - bluebell-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: bluebell-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root1234
+      MYSQL_DATABASE: bluebell
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - bluebell-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:6.2-alpine
+    container_name: bluebell-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - bluebell-network
+
+networks:
+  bluebell-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:

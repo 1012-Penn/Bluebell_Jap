@@ -25,6 +25,7 @@ type ParamVoteData struct {
 	// UserID 从请求中获取当前的用户
 	PostID    string `json:"post_id" binding:"required"`               // 贴子id
 	Direction int8   `json:"direction,string" binding:"oneof=1 0 -1" ` // 赞成票(1)还是反对票(-1)取消投票(0)
+	// 使用int8是因为int8的取值范围是-128到127,而int的取值范围是-2147483648到2147483647,所以使用int8可以节省内存
 }
 
 // ParamPostList 获取帖子列表query string参数

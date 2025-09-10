@@ -23,6 +23,8 @@ import (
 // @BasePath /api/v1
 func main() {
 	if len(os.Args) < 2 {
+		// 如果命令行参数小于2,则提示需要配置文件;
+		// 命令行参数: 程序名 配置文件名;
 		fmt.Println("need config file.eg: bluebell config.yaml")
 		return
 	}

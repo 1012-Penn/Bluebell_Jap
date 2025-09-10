@@ -12,9 +12,6 @@
 4. 执行 `./bin/bluebell conf/config.yaml`，启动程序
 5. API 服务默认运行在 8084 端口，你可以在配置文件中修改
 
-## API 文档
-启动服务后，可以通过访问 [http://127.0.0.1:8084/swagger/index.html](http://127.0.0.1:8084/swagger/index.html) 查看完整的 API 文档。
-
 ## 注意事项
 1. 确保你的MySQL配置是正确的
 2. 确保你的Redis配置是正确的

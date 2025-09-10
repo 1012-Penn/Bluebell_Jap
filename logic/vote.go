@@ -43,6 +43,7 @@ func VoteForPost(userID int64, p *models.ParamVoteData) error {
 		return err
 	}
 	// 同步写入MySQL，做幂等性处理
+	// 幂等性处理是指，如果用户已经投票，则不重复投票
 	if p.Direction == 0 {
 		// 取消点赞，删除记录
 		return mysql.DeletePostVote(userID, p.PostID)

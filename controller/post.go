@@ -43,7 +43,7 @@ func CreatePostHandler(c *gin.Context) {
 func GetPostDetailHandler(c *gin.Context) {
 	// 1. 获取参数（从URL中获取帖子的id）
 	pidStr := c.Param("id")
-	pid, err := strconv.ParseInt(pidStr, 10, 64)
+	pid, err := strconv.ParseInt(pidStr, 10, 64) // 将字符串转换为int64,10表示十进制,64表示int64
 	if err != nil {
 		zap.L().Error("get post detail with invalid param", zap.Error(err))
 		ResponseError(c, CodeInvalidParam)

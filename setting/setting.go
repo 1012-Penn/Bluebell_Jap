@@ -7,7 +7,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-var Conf = new(AppConfig)
+//配置管理: 读取配置文件, 解析配置文件, 将配置文件中的内容映射到结构体中;
+// 使用 Viper 读取 YAML 配置文件
+// 自动映射 配置文件到 Go 结构体
+// 支持热重载 配置文件变更时自动更新
+
+var Conf = new(AppConfig) // 全局变量, 用于存储配置信息;
 
 type AppConfig struct {
 	Name      string `mapstructure:"name"`

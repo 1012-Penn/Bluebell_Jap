@@ -38,7 +38,7 @@ func GetPostList(page, size int64) (posts []*models.Post, err error) {
 	DESC
 	limit ?,?
 	`
-	posts = make([]*models.Post, 0, 2) // 不要写成make([]*models.Post, 2)
+	posts = make([]*models.Post, 0, 2) // 不要写成make([]*models.Post, 2),理由是预估返回的帖子数量为2
 	err = db.Select(&posts, sqlStr, (page-1)*size, size)
 	return
 }
@@ -62,6 +62,11 @@ func GetPostListByIDs(ids []string) (postList []*models.Post, err error) {
 
 // InsertPostVote 插入点赞记录
 func InsertPostVote(userID int64, postID string, voteType int8) error {
+	// 使用 INSERT ... ON DUPLICATE KEY UPDATE 实现"插入或更新"的幂等性操作
+	// 1. 如果 (user_id, post_id) 组合不存在，则插入新记录
+	// 2. 如果 (user_id, post_id) 组合已存在（主键冲突），则更新现有记录
+	// VALUES(vote_type) 表示使用 INSERT 语句中的 vote_type 值来更新
+	// CURRENT_TIMESTAMP 更新创建时间为当前时间
 	sqlStr := `INSERT INTO post_vote (user_id, post_id, vote_type) VALUES (?, ?, ?)
 	ON DUPLICATE KEY UPDATE vote_type = VALUES(vote_type), create_time = CURRENT_TIMESTAMP`
 	_, err := db.Exec(sqlStr, userID, postID, voteType)

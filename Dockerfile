@@ -1,45 +1,32 @@
-FROM golang:alpine AS builder
+# 构建阶段
+FROM golang:1.21-alpine AS builder
 
-# 为我们的镜像设置必要的环境变量
-ENV GO111MODULE=on \
-    CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
+# 设置工作目录
+WORKDIR /app
 
-# 移动到工作目录：/build
-WORKDIR /build
+# 复制go.mod和go.sum文件
+COPY go.mod go.sum ./
 
-# 复制项目中的 go.mod 和 go.sum文件并下载依赖信息
-COPY go.mod .
-COPY go.sum .
+# 下载依赖
 RUN go mod download
 
-# 将代码复制到容器中
+# 复制源代码
 COPY . .
 
-# 将我们的代码编译成二进制可执行文件 bluebell_app
-RUN go build -o bluebell_app .
+# 构建应用
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
-###################
-# 接下来创建一个小镜像
-###################
-FROM debian:stretch-slim
+# 运行阶段
+FROM alpine:latest
 
-COPY ./wait-for.sh /
-COPY ./conf /conf
+WORKDIR /app
 
-# 从builder镜像中把/dist/app 拷贝到当前目录
-COPY --from=builder /build/bluebell_app /
+# 从构建阶段复制二进制文件和配置文件
+COPY --from=builder /app/main .
+COPY --from=builder /app/conf ./conf
 
-RUN set -eux; \
-	apt-get update; \
-	apt-get install -y \
-		--no-install-recommends \
-		netcat; \
-        chmod 755 wait-for.sh
-
-# 声明服务端口
+# 暴露端口
 EXPOSE 8084
 
-# 需要运行的命令
-#ENTRYPOINT ["/bluebell_app", "conf/config.yaml"]
+# 运行应用
+CMD ["./main", "./conf/config.yaml"]
