@@ -24,7 +24,7 @@ type NotificationService struct {
 	backoffSteps []time.Duration
 }
 
-var notifyService = NewNotificationService()
+var notifyService *NotificationService
 
 // NewNotificationService 创建通知服务实例。
 func NewNotificationService() *NotificationService {
@@ -55,6 +55,7 @@ func PublishLikeNotification(ctx context.Context, event *models.NotificationEven
 
 // StartNotificationConsumer 异步消费 MQ 并写入数据库。
 func StartNotificationConsumer(ctx context.Context) {
+	notifyService = NewNotificationService()
 	go notifyService.consume(ctx)
 }
 

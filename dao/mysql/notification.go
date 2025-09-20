@@ -15,7 +15,7 @@ func InsertNotification(event *models.NotificationEvent) error {
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now()
 	}
-	sqlStr := `INSERT INTO user_notification (id, receiver_id, actor_id, post_id, comment_id, type, message, create_time)
+	sqlStr := `INSERT INTO bluebell_notification (id, user_id, from_user_id, post_id, comment_id, type, content, create_time)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := db.Exec(sqlStr, event.ID, event.ReceiverID, event.ActorID, event.PostID, event.CommentID, event.Type, event.Message, event.CreatedAt)
 	return err
@@ -26,9 +26,9 @@ func ListNotificationsAfter(userID, lastID int64, limit int) ([]*models.Notifica
 	if limit <= 0 {
 		limit = 20
 	}
-	sqlStr := `SELECT id, receiver_id, actor_id, post_id, comment_id, type, message, create_time
-FROM user_notification
-WHERE receiver_id = ? AND id > ?
+	sqlStr := `SELECT id, user_id, from_user_id, post_id, comment_id, type, content, create_time
+FROM bluebell_notification
+WHERE user_id = ? AND id > ?
 ORDER BY id ASC
 LIMIT ?`
 	rows, err := db.Query(sqlStr, userID, lastID, limit)
@@ -53,9 +53,9 @@ func ListLatestNotifications(userID int64, limit int) ([]*models.NotificationEve
 	if limit <= 0 {
 		limit = 100
 	}
-	sqlStr := `SELECT id, receiver_id, actor_id, post_id, comment_id, type, message, create_time
-FROM user_notification
-WHERE receiver_id = ?
+	sqlStr := `SELECT id, user_id, from_user_id, post_id, comment_id, type, content, create_time
+FROM bluebell_notification
+WHERE user_id = ?
 ORDER BY id DESC
 LIMIT ?`
 	rows, err := db.Query(sqlStr, userID, limit)
@@ -81,7 +81,7 @@ LIMIT ?`
 
 // GetLastNotificationID 查询某个用户最新的通知 ID。
 func GetLastNotificationID(userID int64) (int64, error) {
-	sqlStr := `SELECT id FROM user_notification WHERE receiver_id = ? ORDER BY id DESC LIMIT 1`
+	sqlStr := `SELECT id FROM bluebell_notification WHERE user_id = ? ORDER BY id DESC LIMIT 1`
 	var id sql.NullInt64
 	err := db.QueryRow(sqlStr, userID).Scan(&id)
 	if err != nil {
