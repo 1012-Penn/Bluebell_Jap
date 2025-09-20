@@ -102,14 +102,14 @@ func CreatePost(postID, communityID int64) error {
 	return err
 }
 
-func VoteForPost(userID, postID string, value float64) error {
+func VoteForPost(userID, postID string, value float64) (float64, error) {
 	// 1. 判断投票限制
 	// 去redis取帖子发布时间
 	postTime := client.ZScore(context.Background(), getRedisKey(KeyPostTimeZSet), postID).Val()
-	//这一行是取帖子发布时间,原理是zscore,zscore是取有序集合中指定成员的分数
-	//client是redis的客户端,提供了Redis操作接口
+	// 这一行是取帖子发布时间,原理是zscore,zscore是取有序集合中指定成员的分数
+	// client是redis的客户端,提供了Redis操作接口
 	if float64(time.Now().Unix())-postTime > oneWeekInSeconds {
-		return ErrVoteTimeExpire
+		return 0, ErrVoteTimeExpire
 	}
 	// 2和3需要放到一个pipeline事务中操作
 
@@ -151,7 +151,7 @@ func VoteForPost(userID, postID string, value float64) error {
 
 	// 更新：如果这一次投票的值和之前保存的值一致，就提示不允许重复投票
 	if value == ov {
-		return ErrVoteRepeated
+		return ov, ErrVoteRepeated
 	}
 	var op float64
 	if value > ov {
@@ -199,6 +199,8 @@ func VoteForPost(userID, postID string, value float64) error {
 			Member: userID, // 用户ID作为成员标识
 		})
 	}
+	// 统一控制点赞关系的生命周期，降低冷数据占用
+	pipeline.Expire(context.Background(), getRedisKey(KeyPostVotedZSetPF+postID), 15*24*time.Hour)
 	_, err := pipeline.Exec(context.Background())
-	return err
+	return ov, err
 }

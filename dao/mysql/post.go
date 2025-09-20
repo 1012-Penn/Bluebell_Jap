@@ -79,3 +79,22 @@ func DeletePostVote(userID int64, postID string) error {
 	_, err := db.Exec(sqlStr, userID, postID)
 	return err
 }
+
+// UpsertPostLikeStat 将热点帖子累计的点赞量增量写入数据库。
+//
+// 表结构示例：
+// CREATE TABLE IF NOT EXISTS post_like_stat (
+//
+//	post_id BIGINT PRIMARY KEY,
+//	like_count BIGINT NOT NULL DEFAULT 0
+//
+// );
+func UpsertPostLikeStat(postID int64, delta int64) error {
+	if delta == 0 {
+		return nil
+	}
+	sqlStr := `INSERT INTO post_like_stat (post_id, like_count) VALUES (?, ?)
+ON DUPLICATE KEY UPDATE like_count = GREATEST(0, like_count + VALUES(like_count))`
+	_, err := db.Exec(sqlStr, postID, delta)
+	return err
+}

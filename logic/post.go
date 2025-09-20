@@ -1,13 +1,21 @@
 package logic
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+
 	"bluebell/dao/mysql"
 	"bluebell/dao/redis"
 	"bluebell/models"
+	"bluebell/pkg/hotspot"
 	"bluebell/pkg/snowflake"
 
+	redisv8 "github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 )
+
+var hotManager = hotspot.GetManager()
 
 func CreatePost(p *models.Post) (err error) {
 	// 1. 生成post id
@@ -18,41 +26,24 @@ func CreatePost(p *models.Post) (err error) {
 		return err
 	}
 	err = redis.CreatePost(p.ID, p.CommunityID)
+	if err == nil {
+		// 帖子创建成功后立即加入布隆过滤器，减少缓存穿透
+		hotManager.Cache().AddToBloom(p.ID)
+	}
 	return
 	// 3. 返回
 }
 
 // GetPostById 根据帖子id查询帖子详情数据
 func GetPostById(pid int64) (data *models.ApiPostDetail, err error) {
-	// 查询并组合我们接口想用的数据
-	post, err := mysql.GetPostById(pid)
+	ctx := context.Background()
+	data, err = getPostDetail(ctx, pid, true)
 	if err != nil {
-		zap.L().Error("mysql.GetPostById(pid) failed",
-			zap.Int64("pid", pid),
-			zap.Error(err))
-		return
-	}
-	// 根据作者id查询作者信息
-	user, err := mysql.GetUserById(post.AuthorID)
-	if err != nil {
-		zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-			zap.Int64("author_id", post.AuthorID),
-			zap.Error(err))
-		return
-	}
-	// 根据社区id查询社区详细信息
-	community, err := mysql.GetCommunityDetailByID(post.CommunityID)
-	if err != nil {
-		zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-			zap.Int64("community_id", post.CommunityID),
-			zap.Error(err))
-		return
-	}
-	// 接口数据拼接
-	data = &models.ApiPostDetail{
-		AuthorName:      user.Username,
-		Post:            post,
-		CommunityDetail: community,
+		if !errors.Is(err, hotspot.ErrPostNotExist) {
+			zap.L().Error("getPostDetail failed",
+				zap.Int64("pid", pid),
+				zap.Error(err))
+		}
 	}
 	return
 }
@@ -65,28 +56,18 @@ func GetPostList(page, size int64) (data []*models.ApiPostDetail, err error) {
 	}
 	data = make([]*models.ApiPostDetail, 0, len(posts))
 
+	ctx := context.Background()
 	for _, post := range posts {
-		// 根据作者id查询作者信息
-		user, err := mysql.GetUserById(post.AuthorID)
-		if err != nil {
-			zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-				zap.Int64("author_id", post.AuthorID),
-				zap.Error(err))
+		postDetail, assembleErr := assemblePostDetail(post)
+		if assembleErr != nil {
+			zap.L().Error("assemblePostDetail failed",
+				zap.Int64("pid", post.ID),
+				zap.Error(assembleErr))
 			continue
 		}
-		// 根据社区id查询社区详细信息
-		community, err := mysql.GetCommunityDetailByID(post.CommunityID)
-		if err != nil {
-			zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-				zap.Int64("community_id", post.CommunityID),
-				zap.Error(err))
-			continue
-		}
-		postDetail := &models.ApiPostDetail{
-			AuthorName:      user.Username,
-			Post:            post,
-			CommunityDetail: community,
-		}
+		// 列表场景只做缓存填充，不增加浏览量
+		hotManager.ObservePost(ctx, postDetail, false)
+		_ = hotManager.Cache().SaveDetail(ctx, postDetail)
 		data = append(data, postDetail)
 	}
 	return
@@ -103,6 +84,7 @@ func GetPostList2(p *models.ParamPostList) (data []*models.ApiPostDetail, err er
 		return
 	}
 	zap.L().Debug("GetPostList2", zap.Any("ids", ids))
+	ctx := context.Background()
 	// 3. 根据id去MySQL数据库查询帖子详细信息
 	// 返回的数据还要按照我给定的id的顺序返回
 	posts, err := mysql.GetPostListByIDs(ids)
@@ -118,28 +100,16 @@ func GetPostList2(p *models.ParamPostList) (data []*models.ApiPostDetail, err er
 
 	// 将帖子的作者及分区信息查询出来填充到帖子中
 	for idx, post := range posts {
-		// 根据作者id查询作者信息
-		user, err := mysql.GetUserById(post.AuthorID)
-		if err != nil {
-			zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-				zap.Int64("author_id", post.AuthorID),
-				zap.Error(err))
+		postDetail, assembleErr := assemblePostDetail(post)
+		if assembleErr != nil {
+			zap.L().Error("assemblePostDetail failed",
+				zap.Int64("pid", post.ID),
+				zap.Error(assembleErr))
 			continue
 		}
-		// 根据社区id查询社区详细信息
-		community, err := mysql.GetCommunityDetailByID(post.CommunityID)
-		if err != nil {
-			zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-				zap.Int64("community_id", post.CommunityID),
-				zap.Error(err))
-			continue
-		}
-		postDetail := &models.ApiPostDetail{
-			AuthorName:      user.Username,
-			VoteNum:         voteData[idx],
-			Post:            post,
-			CommunityDetail: community,
-		}
+		postDetail.VoteNum = voteData[idx]
+		hotManager.ObservePost(ctx, postDetail, false)
+		_ = hotManager.Cache().SaveDetail(ctx, postDetail)
 		data = append(data, postDetail)
 	}
 	return
@@ -170,33 +140,85 @@ func GetCommunityPostList(p *models.ParamPostList) (data []*models.ApiPostDetail
 		return
 	}
 
+	ctx := context.Background()
 	// 将帖子的作者及分区信息查询出来填充到帖子中
 	for idx, post := range posts {
-		// 根据作者id查询作者信息
-		user, err := mysql.GetUserById(post.AuthorID)
-		if err != nil {
-			zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-				zap.Int64("author_id", post.AuthorID),
-				zap.Error(err))
+		postDetail, assembleErr := assemblePostDetail(post)
+		if assembleErr != nil {
+			zap.L().Error("assemblePostDetail failed",
+				zap.Int64("pid", post.ID),
+				zap.Error(assembleErr))
 			continue
 		}
-		// 根据社区id查询社区详细信息
-		community, err := mysql.GetCommunityDetailByID(post.CommunityID)
-		if err != nil {
-			zap.L().Error("mysql.GetUserById(post.AuthorID) failed",
-				zap.Int64("community_id", post.CommunityID),
-				zap.Error(err))
-			continue
-		}
-		postDetail := &models.ApiPostDetail{
-			AuthorName:      user.Username,
-			VoteNum:         voteData[idx],
-			Post:            post,
-			CommunityDetail: community,
-		}
+		postDetail.VoteNum = voteData[idx]
+		hotManager.ObservePost(ctx, postDetail, false)
+		_ = hotManager.Cache().SaveDetail(ctx, postDetail)
 		data = append(data, postDetail)
 	}
 	return
+}
+
+func getPostDetail(ctx context.Context, pid int64, withView bool) (*models.ApiPostDetail, error) {
+	// 1. 本地热点缓存
+	if detail, ok := hotManager.Cache().TryGetHot(pid); ok {
+		hotManager.ObservePost(ctx, detail, withView)
+		return detail, nil
+	}
+
+	// 2. Redis 拆分缓存
+	if detail, err := hotManager.Cache().LoadDetail(ctx, pid); err == nil {
+		hotManager.ObservePost(ctx, detail, withView)
+		return detail, nil
+	} else if !errors.Is(err, redisv8.Nil) && err != nil {
+		zap.L().Warn("LoadDetail failed", zap.Int64("pid", pid), zap.Error(err))
+	}
+
+	// 3. 布隆过滤器与空值缓存兜底
+	if !hotManager.Cache().ShouldQueryDB(ctx, pid) {
+		hotManager.Cache().CacheEmpty(ctx, pid)
+		return nil, hotspot.ErrPostNotExist
+	}
+
+	// 4. 读取数据库并写入缓存
+	detail, err := loadPostDetailFromDB(pid)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			hotManager.Cache().CacheEmpty(ctx, pid)
+		}
+		return nil, err
+	}
+	if saveErr := hotManager.Cache().SaveDetail(ctx, detail); saveErr != nil {
+		zap.L().Warn("SaveDetail failed", zap.Int64("pid", pid), zap.Error(saveErr))
+	}
+	hotManager.ObservePost(ctx, detail, withView)
+	return detail, nil
+}
+
+func loadPostDetailFromDB(pid int64) (*models.ApiPostDetail, error) {
+	post, err := mysql.GetPostById(pid)
+	if err != nil {
+		return nil, err
+	}
+	return assemblePostDetail(post)
+}
+
+func assemblePostDetail(post *models.Post) (*models.ApiPostDetail, error) {
+	if post == nil {
+		return nil, errors.New("post is nil")
+	}
+	user, err := mysql.GetUserById(post.AuthorID)
+	if err != nil {
+		return nil, err
+	}
+	community, err := mysql.GetCommunityDetailByID(post.CommunityID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ApiPostDetail{
+		AuthorName:      user.Username,
+		Post:            post,
+		CommunityDetail: community,
+	}, nil
 }
 
 // GetPostListNew  将两个查询帖子列表逻辑合二为一的函数
