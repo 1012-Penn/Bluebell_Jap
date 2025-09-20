@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 // 定义请求的参数结构体
 
 const (
@@ -34,4 +36,22 @@ type ParamPostList struct {
 	Page        int64  `json:"page" form:"page" example:"1"`       // 页码
 	Size        int64  `json:"size" form:"size" example:"10"`      // 每页数据量
 	Order       string `json:"order" form:"order" example:"score"` // 排序依据
+}
+
+// NotificationEvent 消息通知事件在 MQ 中的载体。
+type NotificationEvent struct {
+	ID         int64     `json:"id"`
+	ReceiverID int64     `json:"receiver_id"`
+	ActorID    int64     `json:"actor_id"`
+	PostID     int64     `json:"post_id"`
+	CommentID  int64     `json:"comment_id"`
+	Type       string    `json:"type"` // like/comment
+	Message    string    `json:"message"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// NotificationPullParam 前端拉取通知时的查询参数。
+type NotificationPullParam struct {
+	LastID int64 `json:"last_id" form:"last_id"`
+	Limit  int   `json:"limit" form:"limit"`
 }

@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"os"
+
 	"bluebell/controller"
 	"bluebell/dao/mysql"
 	"bluebell/dao/redis"
 	"bluebell/logger"
+	"bluebell/logic"
 	"bluebell/pkg/snowflake"
 	"bluebell/router"
 	"bluebell/setting"
-	"fmt"
-	"os"
 )
 
 // @title bluebell项目接口文档
@@ -47,6 +50,9 @@ func main() {
 		return
 	}
 	defer redis.Close()
+
+	// 启动通知异步消费，配合点赞、评论写入 MQ 的策略。
+	logic.StartNotificationConsumer(context.Background())
 
 	if err := snowflake.Init(setting.Conf.StartTime, setting.Conf.MachineID); err != nil {
 		fmt.Printf("init snowflake failed, err:%v\n", err)
