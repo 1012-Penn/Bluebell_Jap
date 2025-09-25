@@ -1,0 +1,58 @@
+# Kafka配置
+kafka:
+  # Kafka broker地址列表
+  brokers:
+    - "localhost:9092"
+  
+  # 客户端配置
+  client_id: "bluebell-notification"
+  timeout: 30
+  
+  # 生产者配置
+  producer:
+    max_retries: 3                    # 最大重试次数
+    retry_delay: 100                  # 重试延迟（毫秒）
+    batch_size: 16384                 # 批处理大小
+    batch_timeout: 10                 # 批处理超时（毫秒）
+    compression: "gzip"               # 压缩算法：none, gzip, snappy, lz4, zstd
+    required_acks: 1                  # 需要确认的副本数：0, 1, -1
+    request_timeout: 30000            # 请求超时（毫秒）
+  
+  # 消费者配置
+  consumer:
+    group_id: "bluebell-notification-group"  # 消费者组ID
+    auto_offset_reset: "latest"              # 偏移量重置策略：earliest, latest
+    enable_auto_commit: true                 # 是否自动提交偏移量
+    auto_commit_interval: 1000               # 自动提交间隔（毫秒）
+    session_timeout: 30000                   # 会话超时（毫秒）
+    heartbeat_interval: 3000                 # 心跳间隔（毫秒）
+    max_poll_records: 500                    # 单次拉取最大记录数
+    fetch_min_bytes: 1                       # 最小拉取字节数
+    fetch_max_wait: 500                      # 最大等待时间（毫秒）
+
+# 通知配置
+notification:
+  # 主题配置
+  topic: "bluebell-notifications"
+  
+  # 拉取配置
+  pull:
+    default_limit: 20                 # 默认拉取数量
+    max_limit: 100                    # 最大拉取数量
+    first_pull_limit: 100             # 首次拉取数量
+  
+  # 节流配置
+  throttle:
+    backoff_steps:                    # 退避策略时间间隔（秒）
+      - 5
+      - 10
+      - 20
+      - 60
+      - 300
+    max_interval: 300                 # 最大间隔（秒）
+  
+  # 缓存配置
+  cache:
+    last_pulled_ttl: 86400           # 最后拉取ID缓存时间（秒）
+    interval_ttl: 86400              # 间隔缓存时间（秒）
+    time_ttl: 86400                  # 时间缓存时间（秒）

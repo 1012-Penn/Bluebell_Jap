@@ -9,6 +9,14 @@ const (
 	OrderScore = "score" // 按分数排序
 )
 
+// 通知类型常量
+const (
+	NotificationTypeLike    = "like"    // 点赞
+	NotificationTypeComment = "comment" // 评论
+	NotificationTypeReply   = "reply"   // 回复
+	NotificationTypeSystem  = "system"  // 系统通知
+)
+
 // ParamSignUp 用户注册请求参数
 //
 // 功能说明：
@@ -106,9 +114,9 @@ type ParamPostList struct {
 // 字段说明：
 // - ID: 通知ID
 // - ReceiverID: 接收者ID
-// - ActorID: 操作者ID
-// - PostID: 相关帖子ID
-// - CommentID: 相关评论ID
+// - ActorID: 操作者ID（指针类型，支持nil）
+// - PostID: 相关帖子ID（指针类型，支持nil）
+// - CommentID: 相关评论ID（指针类型，支持nil）
 // - Type: 通知类型（like/comment）
 // - Message: 通知消息内容
 // - CreatedAt: 创建时间
@@ -117,12 +125,13 @@ type ParamPostList struct {
 // - 统一的通知事件结构，支持多种通知类型
 // - 包含完整的上下文信息，便于处理
 // - 支持时间戳，便于排序和去重
+// - 使用指针类型支持可选字段
 type NotificationEvent struct {
 	ID         int64     `json:"id"`          // 通知ID
 	ReceiverID int64     `json:"receiver_id"` // 接收者ID
-	ActorID    int64     `json:"actor_id"`    // 操作者ID
-	PostID     int64     `json:"post_id"`     // 相关帖子ID
-	CommentID  int64     `json:"comment_id"`  // 相关评论ID
+	ActorID    *int64    `json:"actor_id"`    // 操作者ID（指针类型，支持nil）
+	PostID     *int64    `json:"post_id"`     // 相关帖子ID（指针类型，支持nil）
+	CommentID  *int64    `json:"comment_id"`  // 相关评论ID（指针类型，支持nil）
 	Type       string    `json:"type"`        // 通知类型：like/comment
 	Message    string    `json:"message"`     // 通知消息内容
 	CreatedAt  time.Time `json:"created_at"`  // 创建时间

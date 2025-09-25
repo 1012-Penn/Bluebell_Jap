@@ -1,3 +1,17 @@
+// Package hotspot 热点数据管理包
+//
+// 实现热点数据的识别、缓存和批量处理机制
+// 主要功能：
+// 1. 识别热点帖子（高访问量、高点赞量）
+// 2. 本地缓存热点数据，减少数据库压力
+// 3. 批量处理点赞增量，提高系统性能
+// 4. 智能阈值控制，平衡实时性和性能
+//
+// 技术亮点：
+// - 本地缓存热点数据，减少Redis和数据库访问
+// - 批量处理机制，提高数据库写入效率
+// - 智能阈值控制，平衡实时性和性能
+// - 线程安全设计，支持高并发访问
 package hotspot
 
 import (
@@ -15,18 +29,48 @@ import (
 	redis "github.com/go-redis/redis/v8"
 )
 
-// ErrPostNotExist 表示布隆过滤器判定帖子不存在，避免对数据库造成穿透。
+// ErrPostNotExist 帖子不存在错误
+//
+// 功能说明：
+// 1. 表示布隆过滤器判定帖子不存在
+// 2. 避免对数据库造成穿透攻击
+// 3. 用于快速判断帖子是否存在
+//
+// 技术亮点：
+// - 布隆过滤器预判，避免无效查询
+// - 防止缓存穿透，保护数据库
 var ErrPostNotExist = errors.New("post not exist")
 
-// PostCache 封装帖子详情的多级缓存逻辑。
+// PostCache 帖子详情多级缓存
+//
+// 功能说明：
+// 1. 封装帖子详情的多级缓存逻辑
+// 2. 实现本地缓存+Redis缓存+数据库的三级缓存
+// 3. 支持热点帖子的快速访问
+// 4. 防止缓存穿透和缓存击穿
+//
+// 字段说明：
+// - client: Redis客户端，用于分布式缓存
+// - bloom: 布隆过滤器，防止缓存穿透
+// - hotCache: 本地热点缓存，存储热点帖子
+// - emptyTTL: 空值缓存过期时间
+// - postTTL: 帖子基础信息缓存过期时间
+// - userTTL: 用户信息缓存过期时间
+// - communityTTL: 社区信息缓存过期时间
+//
+// 技术亮点：
+// - 多级缓存策略，提高访问效率
+// - 布隆过滤器，防止缓存穿透
+// - 拆分缓存，提高复用性
+// - 不同TTL策略，优化内存使用
 type PostCache struct {
-	client       *redis.Client
-	bloom        *bloomFilter
-	hotCache     *localCache
-	emptyTTL     time.Duration
-	postTTL      time.Duration
-	userTTL      time.Duration
-	communityTTL time.Duration
+	client       *redis.Client   // Redis客户端
+	bloom        *bloomFilter    // 布隆过滤器
+	hotCache     *localCache     // 本地热点缓存
+	emptyTTL     time.Duration   // 空值缓存过期时间
+	postTTL      time.Duration   // 帖子基础信息缓存过期时间
+	userTTL      time.Duration   // 用户信息缓存过期时间
+	communityTTL time.Duration   // 社区信息缓存过期时间
 }
 
 // NewPostCache 初始化帖子缓存组件。

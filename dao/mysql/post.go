@@ -1,3 +1,12 @@
+// Package mysql MySQL数据访问层
+//
+// 负责处理MySQL数据库操作，是数据持久化层
+// 主要职责：
+// 1. 执行SQL语句
+// 2. 数据查询和插入
+// 3. 错误处理和转换
+// 4. 连接池管理
+// 5. 不包含业务逻辑，只负责数据操作
 package mysql
 
 import (
@@ -8,7 +17,24 @@ import (
 )
 
 // CreatePost 创建帖子
+//
+// 功能说明：
+// 1. 向post表插入新的帖子记录
+// 2. 包含帖子ID、标题、内容、作者ID、社区ID等信息
+//
+// 参数说明：
+// - p: 帖子对象，包含所有必要字段
+//
+// 返回值：
+// - error: 插入过程中的错误
+//
+// 技术亮点：
+// - 使用参数化查询防止SQL注入
+// - 明确的字段列表，避免表结构变更影响
+// - 使用雪花算法生成的ID，避免主键冲突
 func CreatePost(p *models.Post) (err error) {
+	// 插入帖子记录
+	// 技术亮点：使用参数化查询，防止SQL注入攻击
 	sqlStr := `insert into post(
 	post_id, title, content, author_id, community_id)
 	values (?, ?, ?, ?, ?)
@@ -17,9 +43,27 @@ func CreatePost(p *models.Post) (err error) {
 	return
 }
 
-// GetPostById 根据id查询单个贴子数据
+// GetPostById 根据ID查询单个帖子数据
+//
+// 功能说明：
+// 1. 根据帖子ID查询帖子基本信息
+// 2. 包含标题、内容、作者ID、社区ID、创建时间等字段
+//
+// 参数说明：
+// - pid: 帖子ID
+//
+// 返回值：
+// - post: 帖子信息
+// - err: 查询过程中的错误
+//
+// 技术亮点：
+// - 使用参数化查询防止SQL注入
+// - 只查询必要字段，提高查询效率
+// - 使用db.Get查询单条记录
 func GetPostById(pid int64) (post *models.Post, err error) {
 	post = new(models.Post)
+	// 查询帖子基本信息
+	// 技术亮点：明确指定查询字段，避免查询不必要的数据
 	sqlStr := `select
 	post_id, title, content, author_id, community_id, create_time
 	from post
